@@ -4,3 +4,4 @@ from .dataset import Dataset
 from .transforms import *
 from .loader import create_loader
 from .mixup import mixup_target, FastCollateMixup
+from .cifar10 import cifar10_loader

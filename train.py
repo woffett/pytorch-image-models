@@ -13,7 +13,8 @@ except ImportError:
     from torch.nn.parallel import DistributedDataParallel as DDP
     has_apex = False
 
-from timm.data import Dataset, create_loader, resolve_data_config, FastCollateMixup, mixup_target
+from timm.data import Dataset, create_loader, resolve_data_config, \
+    FastCollateMixup, mixup_target, cifar10_loader
 from timm.models import create_model, resume_checkpoint
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
@@ -54,6 +55,8 @@ parser.add_argument('-b', '--batch-size', type=int, default=32, metavar='N',
                     help='input batch size for training (default: 32)')
 parser.add_argument('--drop', type=float, default=0.0, metavar='DROP',
                     help='Dropout rate (default: 0.)')
+parser.add_argument('--use-cifar', action='store_true', default=False,
+                    help='whether to use the cifar10 dataset')
 # Optimizer parameters
 parser.add_argument('--opt', default='sgd', type=str, metavar='OPTIMIZER',
                     help='Optimizer (default: "sgd"')
@@ -146,7 +149,10 @@ def main():
             logging.warning('Using more than one GPU per process in distributed mode is not allowed. Setting num_gpu to 1.')
             args.num_gpu = 1
 
-    args.device = 'cuda:0'
+    if args.num_gpu < 1:
+        args.device = 'cpu'
+    else:
+        args.device = 'cuda:0'
     args.world_size = 1
     args.rank = 0  # global rank
     if args.distributed:
@@ -195,7 +201,7 @@ def main():
                 'AMP does not work well with nn.DataParallel, disabling. Use distributed mode for multi-GPU AMP.')
             args.amp = False
         model = nn.DataParallel(model, device_ids=list(range(args.num_gpu))).cuda()
-    else:
+    elif args.num_gpu == 1:
         model.cuda()
 
     optimizer = create_optimizer(args, model)
@@ -251,51 +257,57 @@ def main():
     if args.local_rank == 0:
         logging.info('Scheduled epochs: {}'.format(num_epochs))
 
-    train_dir = os.path.join(args.data, 'train')
-    if not os.path.exists(train_dir):
-        logging.error('Training folder does not exist at: {}'.format(train_dir))
-        exit(1)
-    dataset_train = Dataset(train_dir)
 
-    collate_fn = None
-    if args.prefetcher and args.mixup > 0:
-        collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
 
-    loader_train = create_loader(
-        dataset_train,
-        input_size=data_config['input_size'],
-        batch_size=args.batch_size,
-        is_training=True,
-        use_prefetcher=args.prefetcher,
-        rand_erase_prob=args.reprob,
-        rand_erase_mode=args.remode,
-        color_jitter=args.color_jitter,
-        interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
-        mean=data_config['mean'],
-        std=data_config['std'],
-        num_workers=args.workers,
-        distributed=args.distributed,
-        collate_fn=collate_fn,
-    )
+    if args.use_cifar:
+        loader_train = cifar10_loader(args, train=True)
+        loader_eval = cifar10_loader(args, train=False)
+    else:
+        train_dir = os.path.join(args.data, 'train')
+        if not os.path.exists(train_dir):
+            logging.error('Training folder does not exist at: {}'.format(train_dir))
+            exit(1)
+        dataset_train = Dataset(train_dir)
 
-    eval_dir = os.path.join(args.data, 'validation')
-    if not os.path.isdir(eval_dir):
-        logging.error('Validation folder does not exist at: {}'.format(eval_dir))
-        exit(1)
-    dataset_eval = Dataset(eval_dir)
+        collate_fn = None
+        if args.prefetcher and args.mixup > 0:
+            collate_fn = FastCollateMixup(args.mixup, args.smoothing, args.num_classes)
 
-    loader_eval = create_loader(
-        dataset_eval,
-        input_size=data_config['input_size'],
-        batch_size=4 * args.batch_size,
-        is_training=False,
-        use_prefetcher=args.prefetcher,
-        interpolation=data_config['interpolation'],
-        mean=data_config['mean'],
-        std=data_config['std'],
-        num_workers=args.workers,
-        distributed=args.distributed,
-    )
+        loader_train = create_loader(
+            dataset_train,
+            input_size=data_config['input_size'],
+            batch_size=args.batch_size,
+            is_training=True,
+            use_prefetcher=args.prefetcher,
+            rand_erase_prob=args.reprob,
+            rand_erase_mode=args.remode,
+            color_jitter=args.color_jitter,
+            interpolation='random',  # FIXME cleanly resolve this? data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
+            num_workers=args.workers,
+            distributed=args.distributed,
+            collate_fn=collate_fn,
+        )
+
+        eval_dir = os.path.join(args.data, 'validation')
+        if not os.path.isdir(eval_dir):
+            logging.error('Validation folder does not exist at: {}'.format(eval_dir))
+            exit(1)
+        dataset_eval = Dataset(eval_dir)
+
+        loader_eval = create_loader(
+            dataset_eval,
+            input_size=data_config['input_size'],
+            batch_size=4 * args.batch_size,
+            is_training=False,
+            use_prefetcher=args.prefetcher,
+            interpolation=data_config['interpolation'],
+            mean=data_config['mean'],
+            std=data_config['std'],
+            num_workers=args.workers,
+            distributed=args.distributed,
+        )
 
     if args.mixup > 0.:
         # smoothing is handled with mixup label transform
@@ -406,7 +418,8 @@ def train_epoch(
             loss.backward()
         optimizer.step()
 
-        torch.cuda.synchronize()
+        if args.num_gpu >= 1:
+            torch.cuda.synchronize()
         if model_ema is not None:
             model_ema.update(model)
         num_updates += 1
