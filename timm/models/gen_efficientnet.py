@@ -668,7 +668,7 @@ class GenEfficientNet(nn.Module):
         self.act_fn = act_fn
         self.num_features = num_features
 
-        use_cifar = kargs.get('use_cifar', False)
+        use_cifar = kwargs.get('use_cifar', False)
         stem_stride = 1 if use_cifar else 2
 
         stem_size = _round_channels(stem_size, channel_multiplier, channel_divisor, channel_min)
