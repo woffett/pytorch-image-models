@@ -491,7 +491,7 @@ def validate(model, loader, loss_fn, args, epoch, log_suffix=''):
                   bar_format='{l_bar}{bar}{r_bar}')
         for batch_idx, (input, target) in it:
             last_batch = batch_idx == last_idx
-            if not args.prefetcher:
+            if not args.prefetcher or ('cuda' in args.device and args.use_cifar):
                 input = input.cuda()
                 target = target.cuda()
 
