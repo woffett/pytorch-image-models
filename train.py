@@ -15,7 +15,6 @@ except ImportError:
 
 from timm.data import Dataset, create_loader, resolve_data_config, \
     FastCollateMixup, mixup_target, cifar10_loader
-from tqdm import tqdm
 from timm.models import create_model, resume_checkpoint
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
@@ -393,10 +392,7 @@ def train_epoch(
     end = time.time()
     last_idx = len(loader) - 1
     num_updates = epoch * len(loader)
-    it = tqdm(enumerate(loader),
-              desc='Training epoch %d' % epoch,
-              bar_format='{l_bar}{bar}{r_bar}')
-    for batch_idx, (input, target) in it:
+    for batch_idx, (input, target) in enumerate(loader):
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
         if not args.prefetcher or ('cuda' in args.device and args.use_cifar):
@@ -440,7 +436,7 @@ def train_epoch(
 
             if args.local_rank == 0:
                 logging.info(
-                    '\nTrain: {} [{:>4d}/{} ({:>3.0f}%)]  '
+                    'Train: {} [{:>4d}/{} ({:>3.0f}%)]  '
                     'Loss: {loss.val:>9.6f} ({loss.avg:>6.4f})  '
                     'Time: {batch_time.val:.3f}s, {rate:>7.2f}/s  '
                     '({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
@@ -487,10 +483,7 @@ def validate(model, loader, loss_fn, args, epoch, log_suffix=''):
     end = time.time()
     last_idx = len(loader) - 1
     with torch.no_grad():
-        it = tqdm(enumerate(loader),
-                  desc='Validating epoch %d' % epoch,
-                  bar_format='{l_bar}{bar}{r_bar}')
-        for batch_idx, (input, target) in it:
+        for batch_idx, (input, target) in enumerate(loader):
             last_batch = batch_idx == last_idx
             if not args.prefetcher or ('cuda' in args.device and args.use_cifar):
                 input = input.cuda()
@@ -527,7 +520,7 @@ def validate(model, loader, loss_fn, args, epoch, log_suffix=''):
             if args.local_rank == 0 and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 logging.info(
-                    '\n{0}: [{1:>4d}/{2}]  '
+                    '{0}: [{1:>4d}/{2}]  '
                     'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
                     'Prec@1: {top1.val:>7.4f} ({top1.avg:>7.4f})  '
