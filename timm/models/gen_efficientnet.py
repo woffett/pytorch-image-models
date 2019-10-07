@@ -660,17 +660,21 @@ class GenEfficientNet(nn.Module):
                  channel_multiplier=1.0, channel_divisor=8, channel_min=None,
                  drop_rate=0., drop_connect_rate=0., act_fn=F.relu,
                  se_gate_fn=sigmoid, se_reduce_mid=False, bn_args=_BN_ARGS_PT,
-                 global_pool='avg', head_conv='default', weight_init='goog', padding_same=False):
+                 global_pool='avg', head_conv='default', weight_init='goog', padding_same=False,
+                 **kwargs):
         super(GenEfficientNet, self).__init__()
         self.num_classes = num_classes
         self.drop_rate = drop_rate
         self.act_fn = act_fn
         self.num_features = num_features
 
+        use_cifar = kargs.get('use_cifar', False)
+        stem_stride = 1 if use_cifar else 2
+
         stem_size = _round_channels(stem_size, channel_multiplier, channel_divisor, channel_min)
         self.conv_stem = sconv2d(
             in_chans, stem_size, 3,
-            padding=_padding_arg(1, padding_same), stride=2, bias=False)
+            padding=_padding_arg(1, padding_same), stride=stem_stride, bias=False)
         self.bn1 = nn.BatchNorm2d(stem_size, **bn_args)
         in_chs = stem_size
 
@@ -1103,15 +1107,27 @@ def _gen_efficientnet(channel_multiplier=1.0, depth_multiplier=1.0, num_classes=
       depth_multiplier: multiplier to number of repeats per stage
 
     """
-    arch_def = [
-        ['ds_r1_k3_s1_e1_c16_se0.25'],
-        ['ir_r2_k3_s2_e6_c24_se0.25'],
-        ['ir_r2_k5_s2_e6_c40_se0.25'],
-        ['ir_r3_k3_s2_e6_c80_se0.25'],
-        ['ir_r3_k5_s1_e6_c112_se0.25'],
-        ['ir_r4_k5_s2_e6_c192_se0.25'],
-        ['ir_r1_k3_s1_e6_c320_se0.25'],
-    ]
+    use_cifar = kwargs.get('use_cifar', False)
+    if use_cifar:
+        arch_def = [
+            ['ds_r1_k3_s1_e1_c16_se0.25'],
+            ['ir_r2_k3_s1_e6_c24_se0.25'], # changed to stride 1
+            ['ir_r2_k5_s1_e6_c40_se0.25'], # changed to stride 1
+            ['ir_r3_k3_s2_e6_c80_se0.25'],
+            ['ir_r3_k5_s1_e6_c112_se0.25'],
+            ['ir_r4_k5_s2_e6_c192_se0.25'],
+            ['ir_r1_k3_s1_e6_c320_se0.25'],
+        ]
+    else:
+        arch_def = [
+            ['ds_r1_k3_s1_e1_c16_se0.25'],
+            ['ir_r2_k3_s2_e6_c24_se0.25'],
+            ['ir_r2_k5_s2_e6_c40_se0.25'],
+            ['ir_r3_k3_s2_e6_c80_se0.25'],
+            ['ir_r3_k5_s1_e6_c112_se0.25'],
+            ['ir_r4_k5_s2_e6_c192_se0.25'],
+            ['ir_r1_k3_s1_e6_c320_se0.25'],
+        ]
     # NOTE: other models in the family didn't scale the feature count
     num_features = _round_channels(1280, channel_multiplier, 8, None)
     model = GenEfficientNet(
