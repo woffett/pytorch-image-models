@@ -15,6 +15,7 @@ except ImportError:
 
 from timm.data import Dataset, create_loader, resolve_data_config, \
     FastCollateMixup, mixup_target, cifar10_loader
+from tqdm import tqdm
 from timm.models import create_model, resume_checkpoint
 from timm.utils import *
 from timm.loss import LabelSmoothingCrossEntropy, SoftTargetCrossEntropy
@@ -346,7 +347,7 @@ def main():
                 lr_scheduler=lr_scheduler, saver=saver, output_dir=output_dir,
                 use_amp=use_amp, model_ema=model_ema)
 
-            eval_metrics = validate(model, loader_eval, validate_loss_fn, args)
+            eval_metrics = validate(model, loader_eval, validate_loss_fn, args, epoch)
 
             if model_ema is not None and not args.model_ema_force_cpu:
                 ema_eval_metrics = validate(
@@ -391,7 +392,10 @@ def train_epoch(
     end = time.time()
     last_idx = len(loader) - 1
     num_updates = epoch * len(loader)
-    for batch_idx, (input, target) in enumerate(loader):
+    it = tqdm(enumerate(loader),
+              desc='Training epoch %d' % epoch,
+              bar_format='{l_bar}{bar}{r_bar}')
+    for batch_idx, (input, target) in it:
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
         if not args.prefetcher:
@@ -435,7 +439,7 @@ def train_epoch(
 
             if args.local_rank == 0:
                 logging.info(
-                    'Train: {} [{:>4d}/{} ({:>3.0f}%)]  '
+                    '\nTrain: {} [{:>4d}/{} ({:>3.0f}%)]  '
                     'Loss: {loss.val:>9.6f} ({loss.avg:>6.4f})  '
                     'Time: {batch_time.val:.3f}s, {rate:>7.2f}/s  '
                     '({batch_time.avg:.3f}s, {rate_avg:>7.2f}/s)  '
@@ -471,7 +475,7 @@ def train_epoch(
     return OrderedDict([('loss', losses_m.avg)])
 
 
-def validate(model, loader, loss_fn, args, log_suffix=''):
+def validate(model, loader, loss_fn, args, epoch, log_suffix=''):
     batch_time_m = AverageMeter()
     losses_m = AverageMeter()
     prec1_m = AverageMeter()
@@ -482,7 +486,10 @@ def validate(model, loader, loss_fn, args, log_suffix=''):
     end = time.time()
     last_idx = len(loader) - 1
     with torch.no_grad():
-        for batch_idx, (input, target) in enumerate(loader):
+        it = tqdm(enumerate(loader),
+                  desc='Validating epoch %d' % epoch,
+                  bar_format='{l_bar}{bar}{r_bar}')
+        for batch_idx, (input, target) in it:
             last_batch = batch_idx == last_idx
             if not args.prefetcher:
                 input = input.cuda()
@@ -519,7 +526,7 @@ def validate(model, loader, loss_fn, args, log_suffix=''):
             if args.local_rank == 0 and (last_batch or batch_idx % args.log_interval == 0):
                 log_name = 'Test' + log_suffix
                 logging.info(
-                    '{0}: [{1:>4d}/{2}]  '
+                    '\n{0}: [{1:>4d}/{2}]  '
                     'Time: {batch_time.val:.3f} ({batch_time.avg:.3f})  '
                     'Loss: {loss.val:>7.4f} ({loss.avg:>6.4f})  '
                     'Prec@1: {top1.val:>7.4f} ({top1.avg:>7.4f})  '
