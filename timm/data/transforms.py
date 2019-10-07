@@ -229,3 +229,29 @@ def transforms_imagenet_eval(
         ]
 
     return transforms.Compose(tfl)
+
+def transforms_cifar10_train(
+        img_size=32,
+        mean=CIFAR10_DEFAULT_MEAN,
+        std=CIFAR10_DEFAULT_STD):
+
+    tfl = [
+        transforms.RandomCrop(img_size, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std)
+    ]
+
+    return transforms.Compose(tfl)
+
+def transforms_cifar10_eval(
+        img_size=32,
+        mean=CIFAR10_DEFAULT_MEAN,
+        std=CIFAR10_DEFAULT_STD):
+
+    tfl = [
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std)
+    ]
+
+    return transforms.Compose(tfl)

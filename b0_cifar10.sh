@@ -1,7 +1,7 @@
 PYTHON=/home/jonathanli/anaconda3/envs/ml/bin/python
-MAIN=/home/jonathanli/Documents/stanford_fall2019/Hazy/pytorch-image-models/train.py
+MAIN=/home/jonathanli/Documents/stanford_fall2019/hazy/pytorch-image-models/train.py
 DATA=/home/jonathanli/datasets
-OUTPUT=/home/jonathanli/Documents/stanford_fall2019/Hazy/pytorch-image-models/cifar10_results
+OUTPUT=/home/jonathanli/Documents/stanford_fall2019/hazy/pytorch-image-models/cifar10_results
 SEED=1
 
 $PYTHON $MAIN $DATA \

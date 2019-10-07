@@ -398,7 +398,7 @@ def train_epoch(
     for batch_idx, (input, target) in it:
         last_batch = batch_idx == last_idx
         data_time_m.update(time.time() - end)
-        if not args.prefetcher:
+        if not args.prefetcher or ('cuda' in args.device and args.use_cifar):
             input = input.cuda()
             target = target.cuda()
             if args.mixup > 0.:
